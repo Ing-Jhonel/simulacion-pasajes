@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pasajes concurrentes · Laboratorio en C</title><meta name="description" content="Proyecto académico de compra concurrente de pasajes de bus con C, pthreads y mutex por asiento."><style>
+:root{color-scheme:dark;--bg:#101916;--panel:#19251f;--ink:#edf1e4;--muted:#a9b8ac;--lime:#c7ef89}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,sans-serif}a{color:inherit}nav,main,footer{max-width:1180px;margin:auto;padding:24px}nav{display:flex;justify-content:space-between;border-bottom:1px solid #344238;gap:20px}nav a{text-decoration:none}nav span{color:var(--lime)}.hero{padding:72px 0 50px;display:grid;grid-template-columns:1.2fr 1fr;gap:50px;align-items:center}.eyebrow{text-transform:uppercase;letter-spacing:.18em;font-size:12px;color:var(--lime)}h1{font-size:clamp(42px,6vw,76px);line-height:1.05;letter-spacing:-.05em;margin:22px 0}h1 em{font-style:normal;color:var(--lime)}p{color:var(--muted);max-width:680px}h2{font-size:32px;letter-spacing:-.03em}h3{margin-bottom:8px}.actions{display:flex;gap:12px;flex-wrap:wrap;margin:30px 0}.button,button{display:inline-block;background:var(--lime);color:#152012;padding:12px 20px;border:0;border-radius:6px;font:600 14px system-ui;text-decoration:none;cursor:pointer}.secondary{background:transparent;border:1px solid #52644f;color:var(--ink)}.bus{background:var(--panel);border:1px solid #43513f;border-radius:24px;padding:28px;box-shadow:12px 14px 0 #0b120f}.bus-head{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}.seats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:18px 0}.seat{border:1px solid #66815a;border-radius:6px 6px 11px 11px;padding:9px;text-align:center;font:12px monospace;color:var(--lime)}.seat:nth-child(3){margin-left:12px}.seat.sold{background:#c7ef89;color:#172014}.legend{font-size:12px;color:var(--muted)}.strip{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #344238;border-bottom:1px solid #344238;padding:24px 0;gap:20px}.strip strong{font-size:28px;display:block}.strip span{font-size:13px;color:var(--muted)}section{padding:45px 0}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:30px}.step{border-top:2px solid #5a6b50;padding-top:16px}.step b{color:var(--lime);font:14px monospace}.notice{border-left:3px solid var(--lime);padding:12px 20px;background:var(--panel);color:var(--muted)}.codebar{display:flex;justify-content:space-between;align-items:center;gap:15px;background:#223025;padding:15px;border-radius:8px 8px 0 0}.codebar span{font:14px monospace}pre{margin:0;background:#0b110e;padding:22px;overflow:auto;border:1px solid #2c3b2e;border-radius:0 0 8px 8px;font:13px/1.65 Consolas,monospace;tab-size:4}.source{max-height:620px}code{font-family:Consolas,monospace}footer{border-top:1px solid #344238;color:var(--muted);font-size:13px}#status{color:var(--lime);font-size:13px}@media(max-width:760px){.hero{grid-template-columns:1fr;padding-top:40px;gap:20px}.strip{grid-template-columns:1fr 1fr}.steps{grid-template-columns:1fr}nav{font-size:13px}nav div{display:flex;gap:14px}.codebar{flex-wrap:wrap}}
+</style><link rel="stylesheet" href="simulation.css"><script src="simulation.js" defer></script></head><body><nav><a href="#">C / <span>LABORATORIO</span></a><div><a href="#simulacion">Simulación</a> &nbsp; <a href="#proyecto">El proyecto</a> &nbsp; <a href="#codigo">Código fuente ↗</a></div></nav><main><div class="hero"><div><div class="eyebrow">Unidad I · Programación concurrente</div><h1>Muchos pasajeros.<br>Un asiento.<br><em>Una sola venta.</em></h1><p>Una simulación de compra de pasajes de bus en C. Explora cómo los hilos y un mutex por asiento coordinan compras simultáneas en un bus de dos pisos.</p><div class="actions"><a class="button" href="#simulacion">Iniciar simulación ↓</a><a class="button secondary" href="flores_hermanos.c" download>Descargar .c</a></div></div><div class="bus" aria-label="Diagrama ilustrativo de asientos"><div class="bus-head"><span>LIMA → AREQUIPA</span><span>DOS PISOS</span></div><h3>La exclusión mutua, a bordo.</h3><div class="seats"><span class="seat sold">A001</span><span class="seat">A002</span><span class="seat sold">A003</span><span class="seat">A004</span><span class="seat">A005</span><span class="seat sold">A006</span><span class="seat">A007</span><span class="seat sold">A008</span><span class="seat sold">A009</span><span class="seat">A010</span><span class="seat">A011</span><span class="seat sold">A012</span></div><div class="legend">Diagrama ilustrativo · Verde sólido: vendido<br>No representa una ejecución del programa.</div></div></div><section id="simulacion" class="simulation"><div class="eyebrow">Simulación interactiva</div><h2>Una compra a la vez. Muchas en paralelo.</h2><p>Inicia la venta y observa los dos pisos. Cada pasajero busca su asiento, lo reserva mientras paga y lo libera si el pago falla. Toca un asiento para ver quién lo está comprando.</p><div class="sim-controls"><label>Pasajeros <input id="passenger-count" type="number" min="1" max="150" value="90"></label><label>Pagos fallidos <select id="failure"><option value="0">0 %</option><option value="8" selected>8 % · original</option><option value="35">35 %</option><option value="100">100 %</option></select></label><span class="pace-badge">⏱ Un movimiento cada 2 segundos</span><button id="start">Iniciar venta ▶</button><button id="pause" class="secondary" disabled>Pausar</button><button id="next-move" class="secondary" disabled>Siguiente movimiento →</button><button id="reset" class="secondary">Reiniciar</button></div><div class="sim-top"><strong id="phase" role="status">Listo para comenzar</strong><span id="time">0.0 / 10.0 s simulados</span></div><progress id="progress" max="10" value="0" aria-label="Tiempo de venta"></progress><div class="sim-metrics"><div><strong id="sold">0</strong><span>Con boleto</span></div><div><strong id="paying">0</strong><span>Pagando a la vez</span></div><div><strong id="free">60</strong><span>Asientos libres</span></div><div><strong id="conflicts">0</strong><span>Intentos con asiento reservado</span></div></div><div id="terminal-scene" class="terminal-scene scene-paused"><div class="terminal-header"><div><div class="eyebrow">Terminal de pasajeros</div><h3>¡Tu boleto, por aquí!</h3></div><span class="terminal-route">LIMA → AREQUIPA 🚌</span></div><p class="terminal-help">Cada dos segundos ocurre una cosa: alguien llega, reserva, paga o recibe su boleto. Varias compras pueden permanecer en proceso.</p><div class="terminal-lanes"><div class="terminal-lane"><div class="lane-sign">01 · LA FILA <span id="queue-count">0 en fila</span></div><div id="queue-actors" class="actors"></div><div class="floor-line"></div></div><div class="terminal-lane counter-lane"><div class="lane-sign">02 · BOLETERÍA <span id="counter-count">0 comprando</span></div><div class="counter-awning">PASAJES · VENTANILLAS</div><div class="clerk">🎫 <span>Elige tu asiento · realiza tu pago</span></div><div id="counter-actors" class="actors"></div><div class="counter-desk"></div></div><div class="terminal-lane"><div class="lane-sign">03 · ¡A BORDO! <span id="boarding-count">0 con boleto</span></div><div id="boarding-actors" class="actors"></div><div class="boarding-door">🚌 BUS DE DOS PISOS →</div></div></div><div id="spotlight" class="spotlight"></div><p id="stage-message" class="stage-message" role="status" aria-live="polite"></p></div><div class="sim-layout"><div><div class="floor-card"><div class="floor-title"><h3>Primer piso</h3><span>12 asientos · parte delantera ↑</span></div><div id="floor1" class="seat-map"></div></div><div class="floor-card"><div class="floor-title"><h3>Segundo piso</h3><span>48 asientos · parte delantera ↑</span></div><div id="floor2" class="seat-map"></div></div><div class="sim-legend"><span>□ Libre</span><span class="amber">◷ Reservado / pagando</span><span class="lime">✓ Vendido</span></div></div><aside><div class="detail"><h3>¿Qué está pasando?</h3><p id="explanation" aria-live="polite">Pulsa Iniciar venta. Los asientos amarillos estarán bloqueados durante el pago; nadie más podrá comprarlos en ese momento.</p><p id="seat-detail">Selecciona un asiento para conocer su estado.</p></div><div class="detail"><h3>Pasajeros</h3><p id="passenger-summary">90 personas esperan el inicio.</p><div id="people" class="people" aria-label="Estado de los pasajeros"></div><div class="sim-legend"><span>· Por llegar</span><span class="blue">↻ Buscando</span><span class="amber">◷ Pagando</span><span class="lime">✓ Con boleto</span><span>× Sin boleto</span></div></div><div class="detail"><h3>Últimos movimientos</h3><ol id="events" class="events" aria-label="Últimos eventos de la simulación"></ol></div></aside></div><div id="result" class="notice" role="status" hidden></div><p class="sim-note">Recreación visual en JavaScript de la lógica del programa C: preferencia de piso del 70 %, llegadas durante los primeros 6 segundos, pagos de 120–450 ms y un boleto por persona. La ventana del modelo es de 10 segundos, pero aquí cada movimiento se presenta durante 2 segundos reales para poder seguirlo. La demostración completa puede durar varios minutos. Puedes pausar o avanzar manualmente con Siguiente movimiento. El navegador representa las compras concurrentes mediante eventos; no ejecuta pthreads reales.</p></section>
+<div class="strip"><div><strong>60</strong><span>asientos: 12 + 48</span></div><div><strong>90</strong><span>pasajeros / hilos</span></div><div><strong>10 s</strong><span>ventana de ventas</span></div><div><strong>1 mutex</strong><span>por cada asiento</span></div></div><section id="proyecto"><div class="eyebrow">El problema</div><h2>Comprar en paralelo, sin sobreventa.</h2><p>Cada pasajero se ejecuta en un hilo independiente e intenta comprar como máximo un boleto. El bloqueo se mantiene desde la consulta del asiento hasta confirmar o cancelar el pago. Otros asientos pueden procesar sus pagos al mismo tiempo.</p><div class="steps"><article class="step"><b>01 / ELEGIR</b><h3>Buscar un asiento</h3><p>El pasajero llega en un momento aleatorio y elige un asiento, con preferencia por uno de los dos pisos.</p></article><article class="step"><b>02 / RESERVAR</b><h3>Proteger la compra</h3><p>Si el mutex está ocupado, el pasajero espera brevemente y vuelve a elegir. Una reserva temporal todavía no es una venta.</p></article><article class="step"><b>03 / CONFIRMAR</b><h3>Completar el pago</h3><p>Si el pago tiene éxito dentro del plazo, se registra el comprador. Si falla o vence el tiempo, el asiento vuelve a quedar disponible.</p></article></div><p class="notice">Modelo académico basado en el caso Flores Hermanos. Ruta, cantidades y tiempos son supuestos configurables; no son datos oficiales de la empresa. No se procesan pagos reales.</p></section><section><div class="eyebrow">Pruébalo en tu equipo</div><h2>De código fuente a simulación.</h2><p>Necesitas GCC con soporte de pthreads, en Linux o en una terminal MSYS2 UCRT64 con las herramientas correspondientes. Descarga el archivo y ejecuta:</p><pre><code>gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -pthread flores_hermanos.c -o flores
+./flores --piso1 2 --piso2 4 --pasajeros 12 --segundos 4 --semilla 42
+./flores --ayuda</code></pre><p>La consola muestra llegadas, reservas, conflictos, pagos y un resumen final. El programa comprueba las relaciones entre pasajeros y asientos y reporta el resultado de su verificación. La semilla fija las secuencias aleatorias; el orden de los hilos puede variar.</p></section><section id="codigo"><div class="eyebrow">Fuente completa</div><h2>El programa, línea por línea.</h2><p>Este sitio muestra el archivo original que compartiste. La ejecución con pthreads se realiza en tu equipo; esta página permite leer y descargar el código.</p><div class="codebar"><span>flores_hermanos.c · C11 / POSIX Threads</span><button id="copy" type="button">Copiar código</button></div><pre class="source"><code id="source">/*
+ * TRABAJO DE UNIDAD I - Compra concurrente de pasajes de bus
+ * Caso: Flores Hermanos, bus interprovincial de dos pisos.
+ *
+ * Compilar (Linux o terminal MSYS2 UCRT64 con GCC y pthreads):
+ *   gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -pthread flores_hermanos.c -o flores
+ * Ejecutar:
+ *   ./flores
+ *   ./flores --piso1 2 --piso2 4 --pasajeros 12 --segundos 4 --semilla 42
+ *   ./flores --ayuda
+ *
+ * REQUISITOS DE LA CONSIGNA
+ * - Lenguaje C y un hilo pthread por pasajero, con identificadores 1..p_num.
+ * - Un pthread_mutex_t por asiento, con identificadores globales 1..s_num.
+ * - Compras aleatorias y concurrentes; impresion de cada compra y resumen.
+ * - Variables globales tiempo_inicio, tiempo_simulacion, s_num y p_num.
+ * - Ciudad de origen, destino y asientos distribuidos en dos pisos.
+ *
+ * MODELO ACADEMICO
+ * 60 asientos (12 + 48), 90 pasajeros, Lima -&gt; Arequipa y 10 segundos son
+ * supuestos configurables; no son datos oficiales de la empresa. Cada
+ * pasajero compra como maximo un boleto. El tiempo de compra esta comprimido
+ * para observar el proceso en clase. No se procesan pagos reales.
+ *
+ * SINCRONIZACION
+ * El mutex de un asiento permanece tomado desde la consulta de disponibilidad
+ * hasta confirmar o cancelar el pago. Se usa trylock: si otro pasajero lo
+ * esta pagando, el hilo espera brevemente y vuelve a elegir. Los asientos
+ * distintos permiten pagos en paralelo. No se usa un bloqueo global para
+ * ejecutar toda la compra. Los mutex de estadisticas y consola solo protegen
+ * operaciones breves; nunca se duerme sosteniendolos.
+ *
+ * Orden de bloqueos: asiento -&gt; estadisticas O asiento -&gt; consola.
+ * No se adquiere un asiento mientras se retiene otro mutex; no hay ciclos.
+ * El estado aleatorio y las estadisticas de cada pasajero pertenecen a su
+ * hilo. main solo los lee despues de pthread_join. La configuracion queda
+ * inmutable antes de iniciar; el reloj se publica mediante una condicion.
+ *
+ * COMPLEJIDAD
+ * Sea S la cantidad de asientos, P la de pasajeros y A el total de intentos.
+ * Inicializacion y resumen: O(S + P). Cada intento: O(1), sin contar esperas
+ * de E/S y planificacion. Trabajo total: O(S + P + A). Memoria: O(S + P),
+ * ademas de las pilas de P hilos. Cada intento fallido incluye una pausa,
+ * por lo que no hay espera activa. No se garantiza equidad entre pasajeros.
+ */
+
+#define _POSIX_C_SOURCE 200809L
+
+#include &lt;errno.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;stdarg.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+/* Variables globales exigidas: tiempos expresados en segundos. */
+double tiempo_inicio = 0.0;       /* Referencia del reloj monotonico. */
+double tiempo_simulacion = 10.0;  /* Duracion de la ventana de ventas. */
+int s_num = 60;
+int p_num = 90;
+
+typedef struct {
+    int id;
+    int piso;
+    int numero_en_piso;
+    pthread_mutex_t mutex;
+    int comprador_id;            /* 0: libre; otro valor: ID del comprador. */
+    int ventas;                  /* Debe ser siempre 0 o 1. */
+    double instante_compra;      /* Segundos transcurridos al confirmar. */
+} Asiento;
+
+typedef enum { FIN_TIEMPO, SIN_CUPO, COMPRA_EXITOSA } Resultado;
+
+typedef struct {
+    int id;
+    uint32_t rng;                /* Generador propio: no comparte rand(). */
+    int piso_preferido;
+    int llegada_ms;
+    int asiento_comprado;
+    unsigned long intentos;
+    unsigned long conflictos;    /* Mutex del asiento tomado por otro hilo. */
+    unsigned long ya_vendidos;
+    unsigned long pagos_fallidos;
+    unsigned long pagos_vencidos;
+    Resultado resultado;
+} Pasajero;
+
+static Asiento *asientos = NULL;
+static Pasajero *pasajeros = NULL;
+static int asientos_piso1 = 12;
+static int asientos_piso2 = 48;
+static int fallo_pago_pct = 8;
+static int ventana_llegadas_ms = -1;
+static uint32_t semilla = 0;
+static const char *origen = &quot;Lima&quot;;
+static const char *destino = &quot;Arequipa&quot;;
+
+static pthread_mutex_t mutex_inicio = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t condicion_inicio = PTHREAD_COND_INITIALIZER;
+static int inicio_publicado = 0;
+static int cancelar_inicio = 0;
+static pthread_mutex_t mutex_consola = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_estadisticas = PTHREAD_MUTEX_INITIALIZER;
+static int vendidos = 0;
+static int activos = 0;
+static int max_activos = 0;
+static int pagos_activos = 0;
+static int max_pagos_activos = 0;
+
+/* Los errores de pthreads son codigos devueltos, no necesariamente errno. */
+static void comprobar_pthread(int codigo, const char *operacion)
+{
+    if (codigo != 0) {
+        fprintf(stderr, &quot;ERROR en %s: %s (codigo %d)\n&quot;,
+                operacion, strerror(codigo), codigo);
+        exit(EXIT_FAILURE);
+    }
+}
+
+static double reloj_segundos(void)
+{
+    struct timespec ahora;
+    if (clock_gettime(CLOCK_MONOTONIC, &amp;ahora) != 0) {
+        perror(&quot;clock_gettime&quot;);
+        exit(EXIT_FAILURE);
+    }
+    return (double)ahora.tv_sec + (double)ahora.tv_nsec / 1000000000.0;
+}
+
+/* El reloj monotonico evita cambios por ajustes de la hora del sistema. */
+static int hay_tiempo(void)
+{
+    return reloj_segundos() &lt; tiempo_inicio + tiempo_simulacion;
+}
+
+static void esperar_hasta(double objetivo)
+{
+    for (;;) {
+        double restante = objetivo - reloj_segundos();
+        struct timespec pausa;
+        if (restante &lt;= 0.0) {
+            return;
+        }
+        pausa.tv_sec = (time_t)restante;
+        pausa.tv_nsec = (long)((restante - (double)pausa.tv_sec) * 1e9);
+        if (pausa.tv_sec == 0 &amp;&amp; pausa.tv_nsec == 0) {
+            pausa.tv_nsec = 1;
+        }
+        if (nanosleep(&amp;pausa, NULL) != 0 &amp;&amp; errno != EINTR) {
+            perror(&quot;nanosleep&quot;);
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+/* Una espera de compra o reintento nunca se programa mas alla del cierre. */
+static void pausar_ms(int milisegundos)
+{
+    double objetivo = reloj_segundos() + (double)milisegundos / 1000.0;
+    double fin = tiempo_inicio + tiempo_simulacion;
+    esperar_hasta(objetivo &lt; fin ? objetivo : fin);
+}
+
+/* xorshift32: aleatoriedad de simulacion; no se usa para criptografia. */
+static uint32_t aleatorio(Pasajero *p)
+{
+    uint32_t x = p-&gt;rng;
+    x ^= x &lt;&lt; 13;
+    x ^= x &gt;&gt; 17;
+    x ^= x &lt;&lt; 5;
+    p-&gt;rng = x;
+    return x;
+}
+
+static int entre(Pasajero *p, int minimo, int maximo)
+{
+    return minimo + (int)(aleatorio(p) % (uint32_t)(maximo - minimo + 1));
+}
+
+/* Solo se serializa la impresion de cada linea, no el proceso de compra. */
+static void evento(int id_pasajero, const char *formato, ...)
+{
+    va_list argumentos;
+    comprobar_pthread(pthread_mutex_lock(&amp;mutex_consola), &quot;lock consola&quot;);
+    printf(&quot;[%9.6f s] P%04d | &quot;, reloj_segundos() - tiempo_inicio, id_pasajero);
+    va_start(argumentos, formato);
+    vprintf(formato, argumentos);
+    va_end(argumentos);
+    putchar(&#39;\n&#39;);
+    comprobar_pthread(pthread_mutex_unlock(&amp;mutex_consola), &quot;unlock consola&quot;);
+}
+
+static int bus_lleno(void)
+{
+    int lleno;
+    comprobar_pthread(pthread_mutex_lock(&amp;mutex_estadisticas), &quot;lock estadisticas&quot;);
+    lleno = vendidos == s_num;
+    comprobar_pthread(pthread_mutex_unlock(&amp;mutex_estadisticas), &quot;unlock estadisticas&quot;);
+    return lleno;
+}
+
+static void cambiar_activos(int cambio)
+{
+    comprobar_pthread(pthread_mutex_lock(&amp;mutex_estadisticas), &quot;lock estadisticas&quot;);
+    activos += cambio;
+    if (activos &gt; max_activos) {
+        max_activos = activos;
+    }
+    comprobar_pthread(pthread_mutex_unlock(&amp;mutex_estadisticas), &quot;unlock estadisticas&quot;);
+}
+
+static void cambiar_pagos(int cambio, int nueva_venta)
+{
+    comprobar_pthread(pthread_mutex_lock(&amp;mutex_estadisticas), &quot;lock estadisticas&quot;);
+    pagos_activos += cambio;
+    vendidos += nueva_venta;
+    if (pagos_activos &gt; max_pagos_activos) {
+        max_pagos_activos = pagos_activos;
+    }
+    comprobar_pthread(pthread_mutex_unlock(&amp;mutex_estadisticas), &quot;unlock estadisticas&quot;);
+}
+
+static int elegir_asiento(Pasajero *p)
+{
+    /* 70% de intentos en el piso preferido; 30% en cualquier asiento. */
+    if (entre(p, 1, 100) &lt;= 70) {
+        if (p-&gt;piso_preferido == 1) {
+            return entre(p, 0, asientos_piso1 - 1);
+        }
+        return entre(p, asientos_piso1, s_num - 1);
+    }
+    return entre(p, 0, s_num - 1);
+}
+
+/* Se invoca con a-&gt;mutex tomado y siempre lo devuelve aun tomado. */
+static int procesar_pago(Pasajero *p, Asiento *a)
+{
+    int exito = 0;
+    double instante;
+    cambiar_pagos(1, 0);
+    evento(p-&gt;id, &quot;RESERVA temporal A%03d, piso %d; procesando pago.&quot;, a-&gt;id, a-&gt;piso);
+    pausar_ms(entre(p, 120, 450));
+    instante = reloj_segundos() - tiempo_inicio;
+
+    if (instante &gt;= tiempo_simulacion) {
+        ++p-&gt;pagos_vencidos;
+        evento(p-&gt;id, &quot;CANCELADO A%03d: termino el tiempo; asiento liberado.&quot;, a-&gt;id);
+    } else if (entre(p, 1, 100) &lt;= fallo_pago_pct) {
+        ++p-&gt;pagos_fallidos;
+        evento(p-&gt;id, &quot;PAGO FALLIDO A%03d: asiento liberado; reintentara.&quot;, a-&gt;id);
+    } else {
+        /* SECCION CRITICA: comprobar y vender usan el MISMO mutex. */
+        a-&gt;comprador_id = p-&gt;id;
+        a-&gt;instante_compra = instante;
+        ++a-&gt;ventas;
+        p-&gt;asiento_comprado = a-&gt;id;
+        p-&gt;resultado = COMPRA_EXITOSA;
+        exito = 1;
+    }
+
+    cambiar_pagos(-1, exito);
+    if (exito) {
+        evento(p-&gt;id, &quot;COMPRA CONFIRMADA A%03d | piso %d | %s -&gt; %s | t=%.6f s&quot;,
+               a-&gt;id, a-&gt;piso, origen, destino, a-&gt;instante_compra);
+    }
+    return exito;
+}
+
+static void *simular_pasajero(void *argumento)
+{
+    Pasajero *p = argumento;
+    comprobar_pthread(pthread_mutex_lock(&amp;mutex_inicio), &quot;lock inicio&quot;);
+    while (!inicio_publicado &amp;&amp; !cancelar_inicio) {
+        comprobar_pthread(pthread_cond_wait(&amp;condicion_inicio, &amp;mutex_inicio), &quot;wait inicio&quot;);
+    }
+    if (cancelar_inicio) {
+        comprobar_pthread(pthread_mutex_unlock(&amp;mutex_inicio), &quot;unlock inicio&quot;);
+        return NULL;
+    }
+    comprobar_pthread(pthread_mutex_unlock(&amp;mutex_inicio), &quot;unlock inicio&quot;);
+
+    esperar_hasta(tiempo_inicio + (double)p-&gt;llegada_ms / 1000.0);
+    if (!hay_tiempo()) {
+        evento(p-&gt;id, &quot;SIN COMPRA: llego al cierre de la simulacion.&quot;);
+        return NULL;
+    }
+    cambiar_activos(1);
+    evento(p-&gt;id, &quot;LLEGA; prefiere piso %d.&quot;, p-&gt;piso_preferido);
+
+    while (hay_tiempo()) {
+        Asiento *a;
+        int codigo;
+        int exito = 0;
+        if (bus_lleno()) {
+            p-&gt;resultado = SIN_CUPO;
+            break;
+        }
+        a = &amp;asientos[elegir_asiento(p)];
+        ++p-&gt;intentos;
+        codigo = pthread_mutex_trylock(&amp;a-&gt;mutex);
+        if (codigo == EBUSY) {
+            ++p-&gt;conflictos;
+            evento(p-&gt;id, &quot;CONFLICTO A%03d: otro pasajero lo esta procesando.&quot;, a-&gt;id);
+        } else {
+            comprobar_pthread(codigo, &quot;trylock asiento&quot;);
+            if (!hay_tiempo()) {
+                comprobar_pthread(pthread_mutex_unlock(&amp;a-&gt;mutex), &quot;unlock asiento&quot;);
+                break;
+            }
+            if (a-&gt;comprador_id != 0) {
+                ++p-&gt;ya_vendidos;
+                evento(p-&gt;id, &quot;A%03d YA VENDIDO; elegira otro asiento.&quot;, a-&gt;id);
+            } else {
+                exito = procesar_pago(p, a);
+            }
+            comprobar_pthread(pthread_mutex_unlock(&amp;a-&gt;mutex), &quot;unlock asiento&quot;);
+        }
+        if (exito) {
+            break; /* Un pasajero no puede comprar un segundo asiento. */
+        }
+        pausar_ms(entre(p, 25, 90));
+    }
+
+    cambiar_activos(-1);
+    if (p-&gt;resultado != COMPRA_EXITOSA) {
+        evento(p-&gt;id, &quot;SIN COMPRA: %s.&quot;,
+               p-&gt;resultado == SIN_CUPO ? &quot;bus sin cupos&quot; : &quot;fin del tiempo&quot;);
+    }
+    return NULL;
+}
+
+static void ayuda(const char *programa)
+{
+    printf(&quot;Uso: %s [opcion valor ...]\n&quot;
+           &quot;  --piso1 N        Asientos del primer piso: 1..80 (12).\n&quot;
+           &quot;  --piso2 N        Asientos del segundo piso: 1..80 (48).\n&quot;
+           &quot;  --pasajeros N    Hilos de pasajeros: 1..1000 (90).\n&quot;
+           &quot;  --segundos T     Duracion: 0.1..3600 segundos (10).\n&quot;
+           &quot;  --semilla N      Semilla: 0..4294967295 (hora actual).\n&quot;
+           &quot;  --origen TEXTO   Ciudad de origen (Lima).\n&quot;
+           &quot;  --destino TEXTO  Ciudad de destino (Arequipa).\n&quot;
+           &quot;  --fallo-pago N   Probabilidad de pago fallido: 0..100 %% (8).\n&quot;
+           &quot;  --llegada-ms N   Llegadas entre 0 y N ms (60 %% de la duracion).\n&quot;
+           &quot;  --ayuda          Muestra esta ayuda.\n&quot;
+           &quot;Ejemplo: %s --piso1 2 --piso2 4 --pasajeros 12 --segundos 4 --semilla 42\n&quot;
+           &quot;La semilla fija las secuencias aleatorias de cada hilo; el orden\n&quot;
+           &quot;de ejecucion y los ganadores dependen del planificador del SO.\n&quot;,
+           programa, programa);
+}
+
+static void argumento_invalido(const char *opcion, const char *valor)
+{
+    fprintf(stderr, &quot;Argumento invalido: %s %s. Consulte --ayuda.\n&quot;, opcion, valor);
+    exit(EXIT_FAILURE);
+}
+
+static long long entero(const char *opcion, const char *valor, long long min, long long max)
+{
+    char *fin;
+    long long numero;
+    errno = 0;
+    numero = strtoll(valor, &amp;fin, 10);
+    if (errno != 0 || fin == valor || *fin != &#39;\0&#39; || numero &lt; min || numero &gt; max) {
+        argumento_invalido(opcion, valor);
+    }
+    return numero;
+}
+
+static void configurar(int argc, char **argv)
+{
+    int i;
+    semilla = (uint32_t)time(NULL);
+    for (i = 1; i &lt; argc; ++i) {
+        const char *opcion = argv[i];
+        const char *valor;
+        if (strcmp(opcion, &quot;--ayuda&quot;) == 0) {
+            ayuda(argv[0]);
+            exit(EXIT_SUCCESS);
+        }
+        if (i + 1 == argc) {
+            argumento_invalido(opcion, &quot;(falta el valor)&quot;);
+        }
+        valor = argv[++i];
+        if (strcmp(opcion, &quot;--piso1&quot;) == 0) {
+            asientos_piso1 = (int)entero(opcion, valor, 1, 80);
+        } else if (strcmp(opcion, &quot;--piso2&quot;) == 0) {
+            asientos_piso2 = (int)entero(opcion, valor, 1, 80);
+        } else if (strcmp(opcion, &quot;--pasajeros&quot;) == 0) {
+            p_num = (int)entero(opcion, valor, 1, 1000);
+        } else if (strcmp(opcion, &quot;--semilla&quot;) == 0) {
+            semilla = (uint32_t)entero(opcion, valor, 0, 4294967295LL);
+        } else if (strcmp(opcion, &quot;--fallo-pago&quot;) == 0) {
+            fallo_pago_pct = (int)entero(opcion, valor, 0, 100);
+        } else if (strcmp(opcion, &quot;--llegada-ms&quot;) == 0) {
+            ventana_llegadas_ms = (int)entero(opcion, valor, 0, 3600000);
+        } else if (strcmp(opcion, &quot;--segundos&quot;) == 0) {
+            char *fin;
+            errno = 0;
+            tiempo_simulacion = strtod(valor, &amp;fin);
+            if (errno != 0 || fin == valor || *fin != &#39;\0&#39; ||
+                !(tiempo_simulacion &gt;= 0.1 &amp;&amp; tiempo_simulacion &lt;= 3600.0)) {
+                argumento_invalido(opcion, valor);
+            }
+        } else if (strcmp(opcion, &quot;--origen&quot;) == 0 || strcmp(opcion, &quot;--destino&quot;) == 0) {
+            size_t longitud = strlen(valor);
+            size_t j;
+            if (longitud == 0 || longitud &gt; 80) {
+                argumento_invalido(opcion, valor);
+            }
+            for (j = 0; j &lt; longitud; ++j) {
+                if ((unsigned char)valor[j] &lt; 32 || (unsigned char)valor[j] == 127) {
+                    argumento_invalido(opcion, valor);
+                }
+            }
+            if (strcmp(opcion, &quot;--origen&quot;) == 0) origen = valor;
+            else destino = valor;
+        } else {
+            argumento_invalido(opcion, valor);
+        }
+    }
+    s_num = asientos_piso1 + asientos_piso2;
+    if (ventana_llegadas_ms &lt; 0) {
+        ventana_llegadas_ms = (int)(tiempo_simulacion * 600.0);
+    }
+    if ((double)ventana_llegadas_ms &gt; tiempo_simulacion * 1000.0) {
+        fprintf(stderr, &quot;La ventana de llegadas no puede superar la duracion.\n&quot;);
+        exit(EXIT_FAILURE);
+    }
+    if (strcmp(origen, destino) == 0) {
+        fprintf(stderr, &quot;Origen y destino deben ser distintos.\n&quot;);
+        exit(EXIT_FAILURE);
+    }
+}
+
+/* Se ejecuta exclusivamente despues de unir TODOS los hilos. */
+static int imprimir_y_validar_resumen(void)
+{
+    int i, piso;
+    int total_asientos = 0, total_pasajeros = 0;
+    int sin_cupo = 0, sin_tiempo = 0;
+    int correcto = 1;
+    unsigned long intentos = 0, conflictos = 0, ocupados = 0;
+    unsigned long fallos = 0, vencidos = 0;
+
+    puts(&quot;\n================ RESUMEN FINAL ================&quot;);
+    printf(&quot;Flores Hermanos | %s -&gt; %s | dos pisos\n&quot;, origen, destino);
+    puts(&quot;MAPA: [asiento:pasajero] o [asiento:LIBRE]. Numeracion unica en ambos pisos.&quot;);
+    for (piso = 1; piso &lt;= 2; ++piso) {
+        int columnas = 0;
+        printf(&quot;PISO %d\n&quot;, piso);
+        for (i = 0; i &lt; s_num; ++i) {
+            const Asiento *a = &amp;asientos[i];
+            if (a-&gt;piso != piso) continue;
+            if (a-&gt;comprador_id == 0) printf(&quot;[A%03d:LIBRE] &quot;, a-&gt;id);
+            else printf(&quot;[A%03d:P%04d] &quot;, a-&gt;id, a-&gt;comprador_id);
+            if (++columnas % 4 == 0) putchar(&#39;\n&#39;);
+        }
+        if (columnas % 4 != 0) putchar(&#39;\n&#39;);
+    }
+
+    puts(&quot;\nASIENTOS COMPRADOS (tabla de boletos)&quot;);
+    puts(&quot;Asiento | Piso | Nro. en piso | Pasajero | Confirmacion (s)&quot;);
+    for (i = 0; i &lt; s_num; ++i) {
+        const Asiento *a = &amp;asientos[i];
+        if (a-&gt;comprador_id != 0) {
+            ++total_asientos;
+            printf(&quot;A%03d    | %d    | %3d          | P%04d    | %.6f\n&quot;,
+                   a-&gt;id, a-&gt;piso, a-&gt;numero_en_piso, a-&gt;comprador_id, a-&gt;instante_compra);
+            if (a-&gt;ventas != 1 || a-&gt;comprador_id &lt; 1 || a-&gt;comprador_id &gt; p_num ||
+                a-&gt;instante_compra &lt; 0.0 || a-&gt;instante_compra &gt;= tiempo_simulacion) {
+                correcto = 0;
+            } else if (pasajeros[a-&gt;comprador_id - 1].asiento_comprado != a-&gt;id) {
+                correcto = 0;
+            }
+        } else if (a-&gt;ventas != 0) {
+            correcto = 0;
+        }
+    }
+    if (total_asientos == 0) puts(&quot;No se confirmaron compras.&quot;);
+
+    for (i = 0; i &lt; p_num; ++i) {
+        const Pasajero *p = &amp;pasajeros[i];
+        intentos += p-&gt;intentos;
+        conflictos += p-&gt;conflictos;
+        ocupados += p-&gt;ya_vendidos;
+        fallos += p-&gt;pagos_fallidos;
+        vencidos += p-&gt;pagos_vencidos;
+        if (p-&gt;resultado == COMPRA_EXITOSA) {
+            ++total_pasajeros;
+            if (p-&gt;asiento_comprado &lt; 1 || p-&gt;asiento_comprado &gt; s_num ||
+                asientos[p-&gt;asiento_comprado - 1].comprador_id != p-&gt;id) correcto = 0;
+        } else {
+            if (p-&gt;asiento_comprado != 0) correcto = 0;
+            if (p-&gt;resultado == SIN_CUPO) ++sin_cupo;
+            else ++sin_tiempo;
+        }
+    }
+
+    printf(&quot;\nAsientos totales: %d | vendidos: %d | libres: %d\n&quot;,
+           s_num, total_asientos, s_num - total_asientos);
+    printf(&quot;Pasajeros: %d | con boleto: %d | sin cupo: %d | por tiempo: %d\n&quot;,
+           p_num, total_pasajeros, sin_cupo, sin_tiempo);
+    printf(&quot;Intentos: %lu | conflictos de mutex: %lu | ya vendidos: %lu\n&quot;,
+           intentos, conflictos, ocupados);
+    printf(&quot;Pagos fallidos: %lu | pagos cancelados al cierre: %lu\n&quot;, fallos, vencidos);
+    printf(&quot;Maximo de pasajeros activos a la vez: %d\n&quot;, max_activos);
+    printf(&quot;Maximo de pagos simultaneos en asientos distintos: %d\n&quot;, max_pagos_activos);
+    printf(&quot;Ocupacion final: %.2f %%\n&quot;, 100.0 * (double)total_asientos / (double)s_num);
+    printf(&quot;Ventana de ventas: %.3f s | tiempo hasta reunir los hilos: %.6f s\n&quot;,
+           tiempo_simulacion, reloj_segundos() - tiempo_inicio);
+
+    if (total_asientos != total_pasajeros || total_asientos != vendidos ||
+        total_asientos &gt; s_num || total_pasajeros + sin_cupo + sin_tiempo != p_num ||
+        activos != 0 || pagos_activos != 0 || max_pagos_activos &gt; s_num ||
+        max_pagos_activos &gt; p_num) correcto = 0;
+    printf(&quot;VERIFICACION: %s\n&quot;, correcto ? &quot;OK&quot; : &quot;ERROR&quot;);
+    if (correcto) {
+        puts(&quot;Sin sobreventa; maximo un boleto por pasajero; compras dentro del plazo;&quot;);
+        puts(&quot;conteos y relaciones asiento-pasajero consistentes; sin pagos pendientes.&quot;);
+    }
+    return correcto;
+}
+
+int main(int argc, char **argv)
+{
+    pthread_t *hilos;
+    int i;
+    int creados = 0;
+    int mutex_creados = 0;
+    int correcto = 0;
+    configurar(argc, argv);
+    /* Salida por lineas completas. El tamano BUFSIZ es necesario: en Windows
+     * (UCRT/MSYS2) un tamano 0 con _IOLBF es invalido y puede abortar. */
+    if (setvbuf(stdout, NULL, _IOLBF, BUFSIZ) != 0) {
+        perror(&quot;setvbuf&quot;);
+        return EXIT_FAILURE;
+    }
+    asientos = calloc((size_t)s_num, sizeof(*asientos));
+    pasajeros = calloc((size_t)p_num, sizeof(*pasajeros));
+    hilos = calloc((size_t)p_num, sizeof(*hilos));
+    if (asientos == NULL || pasajeros == NULL || hilos == NULL) {
+        fprintf(stderr, &quot;No hay memoria suficiente para la simulacion.\n&quot;);
+        goto liberar;
+    }
+
+    for (i = 0; i &lt; s_num; ++i) {
+        int codigo;
+        asientos[i].id = i + 1;
+        asientos[i].piso = i &lt; asientos_piso1 ? 1 : 2;
+        asientos[i].numero_en_piso = i &lt; asientos_piso1 ? i + 1 : i - asientos_piso1 + 1;
+        codigo = pthread_mutex_init(&amp;asientos[i].mutex, NULL);
+        if (codigo != 0) {
+            fprintf(stderr, &quot;No se pudo crear el mutex del asiento %d: %s\n&quot;, i + 1, strerror(codigo));
+            goto liberar;
+        }
+        ++mutex_creados;
+    }
+    for (i = 0; i &lt; p_num; ++i) {
+        int codigo;
+        Pasajero *p = &amp;pasajeros[i];
+        p-&gt;id = i + 1;
+        p-&gt;rng = semilla ^ (UINT32_C(2654435769) * (uint32_t)p-&gt;id);
+        if (p-&gt;rng == 0) p-&gt;rng = UINT32_C(2463534242);
+        p-&gt;piso_preferido = entre(p, 1, 2);
+        p-&gt;llegada_ms = entre(p, 0, ventana_llegadas_ms);
+        p-&gt;resultado = FIN_TIEMPO;
+        codigo = pthread_create(&amp;hilos[i], NULL, simular_pasajero, p);
+        if (codigo != 0) {
+            fprintf(stderr, &quot;No se pudo crear el hilo del pasajero %d: %s\n&quot;, p-&gt;id, strerror(codigo));
+            comprobar_pthread(pthread_mutex_lock(&amp;mutex_inicio), &quot;lock inicio&quot;);
+            cancelar_inicio = 1;
+            comprobar_pthread(pthread_cond_broadcast(&amp;condicion_inicio), &quot;broadcast cancelacion&quot;);
+            comprobar_pthread(pthread_mutex_unlock(&amp;mutex_inicio), &quot;unlock inicio&quot;);
+            for (i = 0; i &lt; creados; ++i) {
+                comprobar_pthread(pthread_join(hilos[i], NULL), &quot;join cancelacion&quot;);
+            }
+            goto liberar;
+        }
+        ++creados;
+    }
+
+    puts(&quot;SIMULACION DE VENTA DE PASAJES - FLORES HERMANOS&quot;);
+    printf(&quot;Ruta: %s -&gt; %s | bus interprovincial de DOS PISOS\n&quot;, origen, destino);
+    printf(&quot;Asientos: %d (piso 1: %d; piso 2: %d) | pasajeros/hilos: %d\n&quot;,
+           s_num, asientos_piso1, asientos_piso2, p_num);
+    printf(&quot;Duracion: %.3f s | semilla: %lu | fallo de pago: %d %%\n&quot;,
+           tiempo_simulacion, (unsigned long)semilla, fallo_pago_pct);
+    printf(&quot;Llegadas aleatorias: 0..%d ms | pagos: 120..450 ms\n&quot;, ventana_llegadas_ms);
+    puts(&quot;Datos y tiempos hipoteticos para fines academicos. Un boleto por pasajero.&quot;);
+    puts(&quot;Cada asiento tiene su mutex; RESERVA no significa COMPRA CONFIRMADA.\n&quot;);
+
+    comprobar_pthread(pthread_mutex_lock(&amp;mutex_inicio), &quot;lock inicio&quot;);
+    tiempo_inicio = reloj_segundos();
+    inicio_publicado = 1;
+    comprobar_pthread(pthread_cond_broadcast(&amp;condicion_inicio), &quot;broadcast inicio&quot;);
+    comprobar_pthread(pthread_mutex_unlock(&amp;mutex_inicio), &quot;unlock inicio&quot;);
+
+    /* Se conserva toda la ventana solicitada aunque el bus se llene antes. */
+    esperar_hasta(tiempo_inicio + tiempo_simulacion);
+    for (i = 0; i &lt; creados; ++i) {
+        comprobar_pthread(pthread_join(hilos[i], NULL), &quot;join pasajero&quot;);
+    }
+    correcto = imprimir_y_validar_resumen();
+
+liberar:
+    for (i = 0; i &lt; mutex_creados; ++i) {
+        comprobar_pthread(pthread_mutex_destroy(&amp;asientos[i].mutex), &quot;destroy asiento&quot;);
+    }
+    comprobar_pthread(pthread_cond_destroy(&amp;condicion_inicio), &quot;destroy condicion&quot;);
+    comprobar_pthread(pthread_mutex_destroy(&amp;mutex_inicio), &quot;destroy inicio&quot;);
+    comprobar_pthread(pthread_mutex_destroy(&amp;mutex_consola), &quot;destroy consola&quot;);
+    comprobar_pthread(pthread_mutex_destroy(&amp;mutex_estadisticas), &quot;destroy estadisticas&quot;);
+    free(hilos);
+    free(pasajeros);
+    free(asientos);
+    return correcto ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+</code></pre><div id="status" role="status" aria-live="polite"></div></section></main><footer>Proyecto académico · Unidad I · C + pthreads<br>Presentación independiente, sin afiliación oficial con la empresa mencionada.</footer><script>document.querySelector('#copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(document.querySelector('#source').textContent);document.querySelector('#status').textContent='Código copiado.'}catch{document.querySelector('#status').textContent='No se pudo copiar automáticamente. Selecciona el código o descarga el archivo .c.'}});</script></body></html>
+
+
